@@ -67,3 +67,105 @@ func TestHandleWebhookRejectsAnUnknownKey(t *testing.T) {
 		t.Errorf("status = %d, want 404", resp.Status)
 	}
 }
+
+// configHost is a minimal Host that serves only GetConfig; every data reader
+// comes from UnimplementedHostData (title lookups fail soft and are ignored).
+type configHost struct {
+	pluginsdk.UnimplementedHostData
+	config map[string]any
+	err    error
+}
+
+func (h *configHost) GetState(context.Context, string, string, string) (map[string]any, bool, error) {
+	return nil, false, nil
+}
+func (h *configHost) SetState(context.Context, string, string, string, map[string]any) error {
+	return nil
+}
+func (h *configHost) DeleteState(context.Context, string, string, string) error { return nil }
+func (h *configHost) ListState(context.Context, string, string) ([]pluginsdk.StateEntry, error) {
+	return nil, nil
+}
+func (h *configHost) GetConfig(context.Context) (map[string]any, error) {
+	if h.err != nil {
+		return nil, h.err
+	}
+	if h.config == nil {
+		return map[string]any{}, nil
+	}
+	return h.config, nil
+}
+func (h *configHost) RevealSecret(context.Context, string) (string, error) { return "", nil }
+func (h *configHost) GetSecret(context.Context, string) (string, bool, error) {
+	return "", false, nil
+}
+func (h *configHost) SetSecret(context.Context, string, string) error         { return nil }
+func (h *configHost) DeleteSecret(context.Context, string) error              { return nil }
+func (h *configHost) EmitEvent(context.Context, string, map[string]any) error { return nil }
+
+// newCommandTestPlugin wires the plugin to a fake process table holding one
+// attributed process whose command line is set.
+func newCommandTestPlugin(host pluginsdk.Host) *taskManagerPlugin {
+	agent := proc(10, 1, "claude", 1, 1<<20)
+	agent.Command = "claude --model opus"
+	scanner := &fakeScanner{
+		tables: [][]procSample{{agent}},
+		env:    map[int]identity{10: {taskID: "task-a", sessionID: "s1"}},
+	}
+	s, _ := newTestSampler(scanner)
+	p := &taskManagerPlugin{sampler: s, titles: newTitleCache()}
+	if host != nil {
+		p.SetHost(host)
+	}
+	return p
+}
+
+func commandsIn(t *testing.T, resp *pluginsdk.WebhookResponse) []string {
+	t.Helper()
+	var body snapshot
+	if err := json.Unmarshal(resp.Body, &body); err != nil {
+		t.Fatalf("response is not JSON: %v", err)
+	}
+	if len(body.Tasks) == 0 {
+		t.Fatalf("no tasks in response: %s", resp.Body)
+	}
+	var out []string
+	for _, task := range body.Tasks {
+		for _, p := range task.Processes {
+			out = append(out, p.Command)
+		}
+	}
+	return out
+}
+
+func TestShowCommandsSetting(t *testing.T) {
+	cases := []struct {
+		name string
+		host pluginsdk.Host
+		want string
+	}{
+		{"no host yet", nil, "claude --model opus"},
+		{"unset defaults to shown", &configHost{}, "claude --model opus"},
+		{"explicit true", &configHost{config: map[string]any{"show_commands": true}}, "claude --model opus"},
+		{"explicit false hides", &configHost{config: map[string]any{"show_commands": false}}, ""},
+		{"non-bool ignored", &configHost{config: map[string]any{"show_commands": "nope"}}, "claude --model opus"},
+		{"config error keeps default", &configHost{err: errScanFailed}, "claude --model opus"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newCommandTestPlugin(tc.host)
+			resp, err := p.HandleWebhook(context.Background(), &pluginsdk.WebhookRequest{
+				WebhookKey: "usage",
+				Method:     http.MethodPost,
+			})
+			if err != nil {
+				t.Fatalf("HandleWebhook: %v", err)
+			}
+			for _, got := range commandsIn(t, resp) {
+				if got != tc.want {
+					t.Errorf("command = %q, want %q", got, tc.want)
+				}
+			}
+		})
+	}
+}

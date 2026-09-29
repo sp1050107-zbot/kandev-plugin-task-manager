@@ -1,6 +1,6 @@
 id: "kandev-plugin-task-manager"
 api_version: 1
-version: "0.1.1"
+version: "0.1.2"
 display_name: "Task Manager"
 description: "Per-task CPU and memory for running agents — a hotkey task manager over the real host process tree."
 author: "kandev"
@@ -39,3 +39,18 @@ ui:
       # Remappable in Settings > Plugins > Task Manager.
       default: "mod+shift+escape"
       description: "Open the per-task CPU / memory task manager"
+
+# Operator settings (Settings > Plugins > Task Manager), read through the Host
+# GetConfig RPC on every poll.
+config_schema:
+  type: object
+  properties:
+    show_commands:
+      type: boolean
+      title: "Show process command lines"
+      description: >-
+        Show each process's command line in the panel. Known secrets (API keys,
+        tokens, passwords, credentials in URLs) are replaced with [REDACTED]
+        before anything leaves the plugin, but redaction is pattern-based.
+        Turn this off to send no command lines to the UI at all.
+      default: true

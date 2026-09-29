@@ -35,6 +35,25 @@ to the task.
 
 ![Filtering by a process command line](docs/media/filter.png)
 
+### Command lines and secrets
+
+Agents sometimes pass credentials on the command line. Before a command line
+leaves the plugin backend, values that look like secrets are replaced with
+`[REDACTED]`, keeping the flag or program name so the row stays readable:
+sensitive flags (`--api-key=…`, `--token …`, `--password`, `--secret`,
+`--auth`, `--cookie`, `--session`, …), `NAME=value` prefixes whose name looks
+sensitive (`GITHUB_TOKEN=…`), `Authorization:`/`Bearer` headers, URL passwords
+(`user:pass@`) and secret query parameters (`?token=`, `access_token=`,
+`key=`), `sshpass -p`, `mysql -p…`, `curl -u user:pass`, and well-known token
+formats (OpenAI/Anthropic `sk-`, GitHub `ghp_`/`gho_`/`ghs_`/`github_pat_`,
+Slack `xox?-`, AWS `AKIA`/`ASIA`, Google `ya29.`, JWTs).
+
+Redaction is pattern-based and cannot recognize every secret. To send no
+command lines to the UI at all, turn off **Show process command lines**
+(`show_commands`) in **Settings → Plugins → Task Manager**. Process
+environments are never exposed: the plugin reads only `KANDEV_TASK_ID` and
+`KANDEV_SESSION_ID` from them.
+
 ## How attribution works
 
 Kandev exports `KANDEV_TASK_ID` and `KANDEV_SESSION_ID` into every agent's

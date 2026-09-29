@@ -72,8 +72,44 @@ func (p *taskManagerPlugin) HandleWebhook(ctx context.Context, req *pluginsdk.We
 		})
 	}
 
+	if !p.showCommands(ctx) {
+		hideCommands(snap)
+	}
 	p.titles.annotate(ctx, p.tasksAPI(), snap.Tasks)
 	return jsonBody(http.StatusOK, usageReport{snapshot: snap, Supported: true})
+}
+
+// configKeyShowCommands is the operator setting (manifest config_schema) that
+// controls whether process command lines leave the plugin at all. Even when
+// shown they are redacted (see redact.go); turning this off is for operators
+// who would rather not trust pattern matching with argv.
+const configKeyShowCommands = "show_commands"
+
+// showCommands reports whether command lines should be returned. Only an
+// explicit boolean false hides them; a missing host, a config read error or
+// a non-boolean value keeps the documented default (shown).
+func (p *taskManagerPlugin) showCommands(ctx context.Context) bool {
+	host := p.Host()
+	if host == nil {
+		return true
+	}
+	cfg, err := host.GetConfig(ctx)
+	if err != nil {
+		log.Printf("task-manager: reading plugin config: %v", err)
+		return true
+	}
+	if show, ok := cfg[configKeyShowCommands].(bool); ok {
+		return show
+	}
+	return true
+}
+
+func hideCommands(snap *snapshot) {
+	for i := range snap.Tasks {
+		for j := range snap.Tasks[i].Processes {
+			snap.Tasks[i].Processes[j].Command = ""
+		}
+	}
 }
 
 // tasksAPI returns kandev's task reader, or nil while the Host connection is
