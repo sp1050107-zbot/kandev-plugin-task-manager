@@ -120,7 +120,7 @@ func sampleFromEntry(entry *windows.ProcessEntry32) (procSample, bool) {
 		sample.StartKey = strconv.Itoa(pid) + ":?"
 	}
 	sample.RSSBytes = workingSetBytes(handle)
-	sample.Command = truncateCommand(sample.Name)
+	sample.Command = displayCommand(sample.Name)
 	return sample, true
 }
 

@@ -69,7 +69,7 @@ func (s *linuxScanner) scan() ([]procSample, error) {
 			// normal and frequent; skipping it is the whole handling.
 			continue
 		}
-		sample.Command = truncateCommand(readCmdline(pid))
+		sample.Command = displayCommand(readCmdline(pid))
 		samples = append(samples, sample)
 	}
 	return samples, nil

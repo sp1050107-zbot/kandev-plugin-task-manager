@@ -45,7 +45,7 @@ func parsePSLine(line string) (procSample, bool) {
 		PPID: ppid,
 		// ps reports the full path; the basename is what a process list wants.
 		Name:       baseName(fields[fixedFields+lstartTokens]),
-		Command:    truncateCommand(command),
+		Command:    displayCommand(command),
 		CPUSeconds: parsePSTime(fields[3]),
 		RSSBytes:   parseUint(fields[2]) * 1024, // ps reports KiB
 		StartKey:   strconv.Itoa(pid) + ":" + start,
